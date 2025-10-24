@@ -1,0 +1,6 @@
+localization
+set goal
+
+ roslaunch follow_waypoints follow_waypoints.launch
+source devel/setup.bash
+rostopic pub /start_journey

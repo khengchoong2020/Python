@@ -1,0 +1,5 @@
+-waypoint --4- mapping process, localization, waypoint navigation , sensor being used > lidar, person recognition, algorithm behind coding amcl dense information of what is used, use laser information to create map grid use color as white and black as obstacle, grey as no information give justification to make valid points
+
+-person identification --
+-tts --greeting -- conversation
+-medicine hand over
