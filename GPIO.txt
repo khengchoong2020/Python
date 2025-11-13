@@ -1,0 +1,7 @@
+buzzer = GPIO22
+ultrasonic echo = 15 trigger = 14
+LED_left = 17
+LED_right = 23
+motion sensor = 4
+SG90 = 18
+MCP3008 = channel 0 for IR sensor and channel 1 for battery level detection channel 2 for voltage monitor
