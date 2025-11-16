@@ -4,9 +4,15 @@ from time import sleep
 
 sensor = DistanceSensor(echo=15, trigger=14, max_distance = 4, pin_factory = PiGPIOFactory())
 
-while True:
+def main():
   try:
-    print('Measured Distance', sensor.distance, 'm')
-    sleep(1)
+    while True:
+      print('Measured Distance', sensor.distance*100, 'cm')
+      sleep(1)
   except KeyboardInterrupt:
+    print("Program stopped by User")
+  finally:
     quit()
+
+if __name__ == '__main__':
+  main()

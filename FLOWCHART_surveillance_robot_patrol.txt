@@ -1,0 +1,178 @@
+================================================================================
+SURVEILLANCE ROBOT SQUARE PATROL - FLOWCHART
+================================================================================
+
+START
+  │
+  ├─→ Initialize GPIO (LEDs, Buzzer, PIR, Ultrasonic, Servo)
+  │
+  ├─→ Attach PIR Callbacks:
+  │   ├─ on_motion() → Trigger Intruder Alarm
+  │   └─ on_no_motion() → Deactivate Alarm
+  │
+  ├─→ INITIAL SCAN OBSTACLES
+  │   │
+  │   ├─→ Servo to LEFT (45°)
+  │   │   └─ Measure distance
+  │   │   └─ If distance < 20cm → left_obstacle = TRUE
+  │   │
+  │   ├─→ Servo to CENTER (90°)
+  │   │   └─ Measure distance
+  │   │   └─ If distance < 20cm → center_obstacle = TRUE
+  │   │
+  │   └─→ Servo to RIGHT (135°)
+  │       └─ Measure distance
+  │       └─ If distance < 20cm → right_obstacle = TRUE
+  │
+  ├─→ CHECK CENTER FOR SAFE PATH
+  │   │
+  │   ├─ If CENTER_CLEAR → Go to PATROL LOOP
+  │   │
+  │   └─ If CENTER_BLOCKED
+  │       ├─ If LEFT_CLEAR → Turn Left, proceed
+  │       ├─ If RIGHT_CLEAR → Turn Right, proceed
+  │       └─ Else → Stop (all blocked)
+  │
+  └─→ PATROL LOOP (movement_counter = 0)
+      │
+      ├─→ [MOVEMENT STEP]
+      │   │
+      │   ├─ Move Forward (500ms)
+      │   │   └─ Both LEDs ON
+      │   │
+      │   ├─ Increment movement_counter++
+      │   │
+      │   └─ Print Counter Status
+      │
+      ├─→ [OBSTACLE CHECK AT EVERY COUNTER INCREMENT] ⭐ NEW
+      │   │
+      │   ├─ Servo to LEFT (45°)
+      │   │   └─ Measure distance
+      │   ├─ Servo to CENTER (90°)
+      │   │   └─ Measure distance
+      │   └─ Servo to RIGHT (135°)
+      │       └─ Measure distance
+      │
+      ├─→ [EVALUATE OBSTACLES]
+      │   │
+      │   ├─ If CENTER_CLEAR
+      │   │   └─ "✓ CENTER is clear - Safe to continue"
+      │   │
+      │   └─ If CENTER_BLOCKED
+      │       ├─ If LEFT_CLEAR → Turn Left
+      │       ├─ If RIGHT_CLEAR → Turn Right
+      │       └─ Else → Stop (all blocked)
+      │
+      ├─→ [CHECK COUNTER LIMIT]
+      │   │
+      │   ├─ If counter < 5
+      │   │   └─ Continue (loop back to MOVEMENT STEP)
+      │   │
+      │   └─ If counter >= 5
+      │       │
+      │       ├─ Reset counter = 0
+      │       ├─ Increment square_count++
+      │       │
+      │       ├─→ [TURN RIGHT AT CORNER]
+      │       │   ├─ Right LED blinks (100ms total)
+      │       │   └─ Sleep (300ms)
+      │       │
+      │       └─ Print "[SQUARE] Completed corner turn #N"
+      │
+      ├─→ [INTRUDER CHECK - NON-BLOCKING]
+      │   │
+      │   └─ PIR Sensor (always monitoring via callback)
+      │       ├─ Motion detected → on_motion() triggered
+      │       │   └─ Sound alarm (buzzer + LED flash)
+      │       │   └─ Continue patrol (non-blocking)
+      │       │
+      │       └─ No motion → on_no_motion() triggered
+      │           └─ Silence alarm
+      │
+      └─ LOOP (repeat until Ctrl+C)
+         └─ While patrol_active == TRUE
+
+
+================================================================================
+COUNTER LOGIC DETAIL
+================================================================================
+
+Counter increments on each forward movement:
+
+    Movement Step 1: counter = 1 → Continue forward
+    Movement Step 2: counter = 2 → Continue forward
+    Movement Step 3: counter = 3 → Continue forward
+    Movement Step 4: counter = 4 → Continue forward
+    Movement Step 5: counter = 5 → TURN RIGHT + SCAN + RESET
+
+
+================================================================================
+INTRUDER ALARM CALLBACK (Interrupt-Driven)
+================================================================================
+
+PIR Motion Sensor Interrupt Handler:
+
+    ┌─────────────────────────────────────────┐
+    │ MOTION DETECTED (PIR Sensor)            │
+    └─────────────────────────────────────────┘
+                    │
+                    ├─→ on_motion() Callback (Async - non-blocking)
+                    │   │
+                    │   ├─ Check cooldown (30 seconds)
+                    │   │
+                    │   ├─ If cooldown expired:
+                    │   │   ├─ Set alarm_active = TRUE
+                    │   │   ├─ Sound buzzer (440Hz)
+                    │   │   ├─ Flash LEDs (5 cycles)
+                    │   │   └─ Print "[ALARM] *** INTRUDER DETECTED! ***"
+                    │   │
+                    │   └─ Patrol continues (non-blocking)
+                    │
+                    └─→ No Motion (timeout)
+                        └─ on_no_motion() Callback
+                            ├─ Set alarm_active = FALSE
+                            ├─ Turn off buzzer
+                            └─ Turn off LEDs
+
+
+================================================================================
+STATE VARIABLES
+================================================================================
+
+Global Variables:
+
+    patrol_active        (bool)    - Main loop control
+    movement_counter     (int)     - Counts forward movements (0-5)
+    square_count         (int)     - Counts completed squares
+    last_intruder_alert  (float)   - Timestamp of last alarm (cooldown)
+    alarm_active         (bool)    - Current alarm state
+
+    Obstacle Detection (bool):
+    - left_obstacle      - Obstacle in LEFT direction (45°)
+    - center_obstacle    - Obstacle in CENTER direction (90°)
+    - right_obstacle     - Obstacle in RIGHT direction (135°)
+
+
+================================================================================
+SENSOR CONFIGURATION
+================================================================================
+
+DISTANCE THRESHOLD:    20 cm (if distance < 20cm → obstacle = TRUE)
+
+SERVO ANGLES:
+    - LEFT:    45°
+    - CENTER:  90°
+    - RIGHT:   135°
+
+PIR COOLDOWN:          30 seconds (prevent repeated alarms)
+
+LED BEHAVIOR:
+    - Forward:  Both LEDs ON (steady)
+    - Turn:     Turning LED blinks (10ms interval)
+    - Stop:     Both LEDs OFF
+
+BUZZER:
+    - Frequency: 440 Hz
+    - During alarm: Buzzer ON (0.7 power) for 0.3s, then OFF for 0.3s (5 cycles)
+
+================================================================================
