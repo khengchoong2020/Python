@@ -4,7 +4,7 @@ Date        : 2025-11-09
 Description : This is a python code for Raspberry Pi 3B to integrate multiple sensors (IR, Ultrasonic, PIR) and an LED for a surveillance robot application.
             : Task 1 (motion control)
             : - using 2 LEDs to represent the Motion control
-            - forward movement = left and right LED are lit(LED_left = 17 and LED_right = 23)
+            - forward movement = left and right LED are lit(LED_left = 17 and LED_right = 27)
             - backward movement = left and right LED are blinking at rate of 100ms
             - right turn = right LED will blink at rate of 10ms
             - left turn = left LED will blink at rate of 10ms
@@ -27,15 +27,26 @@ Description : This is a python code for Raspberry Pi 3B to integrate multiple se
             task 5 (motion detection)
             turn on the spotlight , actiuvate the intruder alert
 
-
             buzzer = GPIO22
             ultrasonic echo = 15 trigger = 14
             LED_left = 17
-            LED_right = 23
+            LED_right = 27
             motion sensor = 4
             SG90 = 18
             MCP3008 = channel 0 for IR sensor and channel 1 for battery level detection channel 2 for voltage monitor
 
+
+            obstaacle avoidance logic:
+            |left            |center            |right            |action
+              0               0                   0                 forward
+              0               0                   1                 forward
+              0               1                   0                 left
+              0               1                   1                 left
+              1               0                   0                 forward
+              1               0                   1                 forward
+              1               1                   0                 right
+              1               1                   1                 backward and turn left
+              
 """
 # Import necessary libraries
 from gpiozero import LED, MCP3008, MotionSensor, DistanceSensor,PWMOutputDevice,Button
@@ -76,6 +87,7 @@ if not pi.connected:
 SERVO_PIN = 18
 LEDLeft = LED(17)
 LEDRight = LED(27)
+spotlight = LED(21)
 pir = MotionSensor(4, queue_len =1, sample_rate = 10, threshold =0.5)    # GPIO4
 v_regulation = MCP3008(0)  # assuming the sensor is connected to channel 0
 #battery_level_sensor = MCP3008(1)  # channel 1 for battery level detection
@@ -235,12 +247,20 @@ def report_obstacles(results):
         print("✗ All directions blocked - Reverse and try again")
     print()
 
+
 def stop_all():
     LEDLeft.off()
     LEDRight.off()
     stop_servo()
     buzzer.value = 0
     pi.stop()
+
+def spotlight_blink():
+    for _ in range(6):
+        spotlight.toggle()
+        sleep(0.1)
+        spotlight.toggle()
+        sleep(0.1)
 
 def LED_BLINK(count, interval, left=True, right=True):
     for _ in range(count):
@@ -309,7 +329,9 @@ def on_motion():
         LEDLeft.toggle()
         LEDRight.toggle()
         sleep(0.3)
-    
+
+    spotlight_blink()
+  
     buzzer.value = 0
     LEDLeft.off()
     LEDRight.off()
@@ -493,4 +515,5 @@ def main():
         print("Cleanup completed")
 
 if __name__ == '__main__':
+
     main()
