@@ -1,7 +1,7 @@
 """
 Author      : KOH KHENG CHOONG
 Date        : 2025-11-09
-Description : This is a python code for Raspberry Pi 3B to integrate multiple sensors (IR, Ultrasonic, PIR) and an LED for a surveillance robot application.
+Description : This is a python code for Raspberry Pi 3B to integrate multiple sensors (IR, Ultrasonic, PIR) and LED for a surveillance robot application.
             : Task 1 (motion control)
             : - using 2 LEDs to represent the Motion control
             - forward movement = left and right LED are lit(LED_left = 17 and LED_right = 27)
@@ -11,7 +11,7 @@ Description : This is a python code for Raspberry Pi 3B to integrate multiple se
             - stop = both LED off
             : Task 2 (obstacle detection)
             : - using ultrasonic sensor to detect obstacle within 20cm distance
-            - i. first , the robot will stop and turn the sensor(left to right using SG90 srvo) to scan the surronding area ti find a new sroute to proceed
+            - i. first , the robot will stop and turn the sensor(left to right using SG90 srvo) to scan the surronding area to find a new sroute to proceed
             - ii reverse and turn slightly left or right and seume patrol logic from adjusted position
             : Task 3 (alarm system)
             - obstacle avoidance alert blinking LEDs at a rate of 1s
@@ -30,47 +30,24 @@ Description : This is a python code for Raspberry Pi 3B to integrate multiple se
             buzzer = GPIO22
             ultrasonic echo = 15 trigger = 14
             LED_left = 17
-            LED_right = 27
+            LED_right = 23
             motion sensor = 4
             SG90 = 18
             MCP3008 = channel 0 for IR sensor and channel 1 for battery level detection channel 2 for voltage monitor
 
-
-            obstaacle avoidance logic:
-            |left            |center            |right            |action
-              0               0                   0                 forward
-              0               0                   1                 forward
-              0               1                   0                 left
-              0               1                   1                 left
-              1               0                   0                 forward
-              1               0                   1                 forward
-              1               1                   0                 right
-              1               1                   1                 backward and turn left
-              
 """
 # Import necessary libraries
-from gpiozero import LED, MCP3008, MotionSensor, DistanceSensor,PWMOutputDevice,Button
+from gpiozero import LED, MCP3008, MotionSensor, DistanceSensor,PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
 import pigpio
 from time import sleep
 import time
 
-#battery_voltage_divider = 3.0
-#battery_low_threshold = 6.5  # example threshold for low battery
-#battery_reference_voltage = 3.3
 
-#obstacle_distance_threshold = 20  # in cm
-
-#intruder_alert_colddown = 30
-#low_battery_alert_cooldown = 60
-
-#servo_center_angle = 90
-#servo_scan_angles = range(0, 181, 30)
-
-#emergency_stop_pin = 23  # GPIO pin for emergency stop switch
+battery_low_threshold = 3.0  # example threshold for low battery
 
 # Configuration
-OBSTACLE_THRESHOLD_CM = 20
+OBSTACLE_THRESHOLD_CM = 16
 MOVEMENT_COUNTER_LIMIT = 5
 INTRUDER_ALERT_COOLDOWN = 30
 
@@ -87,22 +64,14 @@ if not pi.connected:
 SERVO_PIN = 18
 LEDLeft = LED(17)
 LEDRight = LED(27)
-spotlight = LED(21)
+spotlight = LED(5)
+obstacle_alert_led = LED(6)
 pir = MotionSensor(4, queue_len =1, sample_rate = 10, threshold =0.5)    # GPIO4
 v_regulation = MCP3008(0)  # assuming the sensor is connected to channel 0
-#battery_level_sensor = MCP3008(1)  # channel 1 for battery level detection
-#voltage_monitor_sensor = MCP3008(2)  # channel 2 for voltage monitoring
 buzzer = PWMOutputDevice(22, frequency = 440, initial_value =0)
 ultrasonic_echo = 15
 ultrasonic_trigger = 14
 sensor = DistanceSensor(echo=ultrasonic_echo, trigger=ultrasonic_trigger,max_distance=4, pin_factory=PiGPIOFactory())
-
-#emergency_stop = Button(emergency_stop_pin, pull_up=True, bounce_time=0.1)
-system_active = True
-
-#last_intruder_alert = 0
-#last_battery_alert = 0
-#servo_angle = servo_center_angle
 
 # Global state tracking
 motion_detected_time = 0
@@ -133,22 +102,12 @@ def stop_servo():
 
 def get_distance_cm():
     try:
-        return sensor.distance * 100  # convert to cm and sensor is ultrasonic
+        sleep(0.1)
+        return sensor.distance * 100  # convert to cm and sensor is 
     except Exception as e:
         print(f"Error reading distance: {e}")
 
-#def get_battery_voltage():
-#    adc_value = battery_level_sensor.value  # MCP3008 value between 0 and 1
-#    voltage = adc_value * battery_reference_voltage * battery_voltage_divider
-#    return voltage
 
-#def check_emergency_stop():    
-#    global system_active
-#    if not emergency_stop.is_pressed:
-#        system_active = False
-#        print("Emergency stop activated! Shutting down the system.")
-#        stop_all()
-#    return False
 
 def detect_obstacle(distance):
     """
@@ -185,7 +144,7 @@ def scan_obstacles():
     # Scan LEFT direction (45 degrees)
     print("\n[LEFT] Scanning at 45°...")
     set_angle(ANGLE_LEFT)
-    sleep(0.5)
+    sleep(0.8)
     left_distance = get_distance_cm()
     left_obstacle = detect_obstacle(left_distance)
     results['left'] = left_obstacle
@@ -195,7 +154,7 @@ def scan_obstacles():
     # Scan CENTER direction (90 degrees)
     print("\n[CENTER] Scanning at 90°...")
     set_angle(ANGLE_CENTER)
-    sleep(0.5)
+    sleep(0.8)
     center_distance = get_distance_cm()
     center_obstacle = detect_obstacle(center_distance)
     results['center'] = center_obstacle
@@ -205,7 +164,7 @@ def scan_obstacles():
     # Scan RIGHT direction (135 degrees)
     print("\n[RIGHT] Scanning at 135°...")
     set_angle(ANGLE_RIGHT)
-    sleep(0.5)
+    sleep(0.8)
     right_distance = get_distance_cm()
     right_obstacle = detect_obstacle(right_distance)
     results['right'] = right_obstacle
@@ -247,20 +206,12 @@ def report_obstacles(results):
         print("✗ All directions blocked - Reverse and try again")
     print()
 
-
 def stop_all():
     LEDLeft.off()
     LEDRight.off()
     stop_servo()
     buzzer.value = 0
     pi.stop()
-
-def spotlight_blink():
-    for _ in range(6):
-        spotlight.toggle()
-        sleep(0.1)
-        spotlight.toggle()
-        sleep(0.1)
 
 def LED_BLINK(count, interval, left=True, right=True):
     for _ in range(count):
@@ -317,24 +268,17 @@ def on_motion():
     alarm_active = True
     print(f"\n[ALARM] Motion detected! (Event #{motion_count})")
     print(f"Timestamp: {time.strftime('%H:%M:%S', time.localtime(motion_detected_time))}")
-    
+    spotlight.on()
     # Sound alarm - buzzer + LED flash
     for _ in range(5):
-        buzzer.value = 0.7
-        LEDLeft.on()
-        LEDRight.on()
+        buzzer.value = 0.7      
         sleep(0.3)
         
-        buzzer.value = 0
-        LEDLeft.toggle()
-        LEDRight.toggle()
+        buzzer.value = 0       
         sleep(0.3)
-
-    spotlight_blink()
-  
+    
     buzzer.value = 0
-    LEDLeft.off()
-    LEDRight.off()
+ 
     print("[ALARM] Intruder alarm deactivated\n")
 
 
@@ -347,8 +291,7 @@ def on_no_motion():
     last_motion_event = "No Motion"
     alarm_active = False
     buzzer.value = 0
-    LEDLeft.off()
-    LEDRight.off()
+    spotlight.off()
     print(f"[INTERRUPT] No motion detected")
     print(f"Timestamp: {time.strftime('%H:%M:%S', time.localtime())}\n")
 
@@ -362,106 +305,172 @@ def get_motion_status():
     return pir.motion_detected
 
 
+def obstacle_avoidance_logic(left_obs, center_obs, right_obs):
+    """
+    Obstacle avoidance decision logic based on sensor readings.
+    
+    Truth Table:
+    Left | Center | Right | Action
+    -----|--------|-------|-------------------
+      0  |   0    |   0   | Forward
+      0  |   0    |   1   | Forward
+      0  |   1    |   0   | Turn Left
+      0  |   1    |   1   | Turn Left
+      1  |   0    |   0   | Forward
+      1  |   0    |   1   | Forward
+      1  |   1    |   0   | Turn Right
+      1  |   1    |   1   | Backward + Turn Left
+    
+    Args:
+        left_obs (bool): True if obstacle detected on LEFT
+        center_obs (bool): True if obstacle detected on CENTER
+        right_obs (bool): True if obstacle detected on RIGHT
+    
+    Returns:
+        str: Action to take ("forward", "left", "right", "backward_left")
+    """
+    # Convert to binary values
+    left = 1 if left_obs else 0
+    center = 1 if center_obs else 0
+    right = 1 if right_obs else 0
+    
+    # Apply truth table logic
+    if left == 0 and center == 0 and right == 0:
+        return "forward"  # 0 0 0
+    elif left == 0 and center == 0 and right == 1:
+        return "forward"  # 0 0 1
+    elif left == 0 and center == 1 and right == 0:
+        return "left"     # 0 1 0
+    elif left == 0 and center == 1 and right == 1:
+        return "left"     # 0 1 1
+    elif left == 1 and center == 0 and right == 0:
+        return "forward"  # 1 0 0
+    elif left == 1 and center == 0 and right == 1:
+        return "forward"  # 1 0 1
+    elif left == 1 and center == 1 and right == 0:
+        return "right"    # 1 1 0
+    elif left == 1 and center == 1 and right == 1:
+        return "backward_left"  # 1 1 1
+    
+    return "forward"  # Default action
+ 
+
+def check_voltage_regulation(min_voltage=3.2):
+    """
+    Check voltage regulation/battery level from MCP3008 channel 0.
+    
+    MCP3008 returns a normalized value (0.0-1.0) representing 0V to 3.3V.
+    If a voltage divider is used, multiply by voltage_divider to get actual battery voltage.
+    
+    Args:
+        min_voltage (float): Minimum safe voltage threshold in volts.
+        voltage_divider (float): Voltage divider ratio (default 3.0 for 2S LiPo ~7.4V).
+    
+    Returns:
+        bool: True if voltage is OK or exceeds min_voltage; False if below threshold.
+    """
+    try:
+        # v_regulation is MCP3008(0) - reads normalized value 0.0-1.0
+        adc_value = v_regulation.value
+        # Convert to actual voltage: ADC reads 0V-3.3V at Pi reference
+        # If voltage divider is used, scale by divider ratio
+        actual_voltage = adc_value * 3.3 
+        print(f"[VOLTAGE] ADC: {adc_value:.3f} → {actual_voltage:.2f}V (min {min_voltage}V)")
+        return actual_voltage >= min_voltage
+    except Exception as e:
+        print(f"[VOLTAGE] Voltage check error: {e}")
+        return True  # Safe default: allow movement on error
+
+
 def patrol_logic():
     """
-    Patrol logic with obstacle detection BEFORE movement:
-    - Scan for obstacles before each movement
-    - Move forward in counter of 5 (each iteration 2 seconds)
-    - After 5th iteration: turn right and reset counter
-    - Repeat continuously
+    Patrol logic following the flowchart:
+    - Triggered by motion interrupt state (motion flag managed elsewhere)
+    - Check voltage regulation first
+    - If movement_counter < MOVEMENT_COUNTER_LIMIT: scan and move according to truth table
+    - If movement_counter >= MOVEMENT_COUNTER_LIMIT: check RIGHT obstacle before turning right
     """
     global movement_counter, patrol_active
-    
+
     print("\n" + "=" * 70)
-    print("PATROL LOGIC STARTED - Square Pattern with Pre-Movement Obstacle Detection")
+    print("PATROL LOGIC STARTED - Flowchart-driven with Voltage Check")
     print("=" * 70)
-    print("Pattern: Scan obstacles → Move forward (2 sec) → x5 → Turn Right → Repeat\n")
-    
+
     while patrol_active:
-        # STEP 1: Scan for obstacles BEFORE movement
-        print(f"\n[SCAN] Scanning obstacles BEFORE movement {movement_counter + 1}/5...")
-        scan_results = scan_obstacles()
-        
-        # Check if center is clear to proceed
-        if scan_results['center']:
-            print("⚠ WARNING: CENTER direction has obstacle - cannot proceed safely!")
-            print("Checking alternate routes...")
-            
-            if not scan_results['left']:
-                print("✓ LEFT is clear - Turning left instead...")
-                left_turn()
-            elif not scan_results['right']:
-                print("✓ RIGHT is clear - Turning right instead...")
-                right_turn()
-            else:
-                print("✗ All directions blocked! Stopping patrol...")
-                stop()
-                break
-        else:
-            print("✓ CENTER is clear - Safe to move forward")
-            
-            # STEP 2: Move forward for 2 seconds
-            print(f"[MOVE] Forward movement {movement_counter + 1}/5")
-            forward()
-            sleep(2)
+        # Motion interrupt triggers are handled by on_motion(); here we run looped patrol
+        print(f"\n[STATE] Movement counter: {movement_counter} / {MOVEMENT_COUNTER_LIMIT}")
+
+        # Voltage regulation check
+        if not check_voltage_regulation():
+            print("[VOLTAGE] Voltage too low - entering idle/charging mode")
             stop()
-            
-            # Increment counter
-            movement_counter += 1
-            
-            # STEP 3: Check if reached 5 iterations
-            if movement_counter >= MOVEMENT_COUNTER_LIMIT:
-                print(f"\n[TURN] Completed 5 forward movements - Turning right...\n")
+            sleep(2)
+            continue
+
+        if movement_counter < MOVEMENT_COUNTER_LIMIT:
+            # Scan for obstacles and decide
+            print(f"[SCAN] Scanning obstacles BEFORE movement {movement_counter + 1}/{MOVEMENT_COUNTER_LIMIT}...")
+            scan_results = scan_obstacles()
+            left_obstacle = scan_results['left']
+            center_obstacle = scan_results['center']
+            right_obstacle = scan_results['right']
+
+            action = obstacle_avoidance_logic(left_obstacle, center_obstacle, right_obstacle)
+            print(f"[LOGIC] LEFT:{left_obstacle} CENTER:{center_obstacle} RIGHT:{right_obstacle} → {action}")
+
+            if action == 'forward':
+                print(f"[MOVE] Forward movement {movement_counter + 1}/{MOVEMENT_COUNTER_LIMIT}")
+                forward()
+                sleep(2)
+                stop()
+                movement_counter += 1
+            elif action == 'left':
+                print("[AVOID] Turning LEFT to avoid obstacle")
+                #when obstacle detected ,obstacle_led will blink at 1s interval
+                obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
+                left_turn()
+            elif action == 'right':
+                print("[AVOID] Turning RIGHT to avoid obstacle")
+                #when obstacle detected ,obstacle_led will blink at 1s interval
+                obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
                 right_turn()
-                movement_counter = 0  # Reset counter
-        
+            elif action == 'backward_left':
+                print("[AVOID] All blocked - moving BACKWARD then LEFT")
+                #when obstacle detected ,obstacle_led will blink at 1s interval
+                obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
+                backward()
+                left_turn()
+                movement_counter = 0
+
+        else:
+            # movement_counter reached limit; before turning right, check right obstacle
+            print("[CHECK] Reached movement limit - checking RIGHT before turning")
+            scan_results = scan_obstacles()
+            if scan_results['right']:
+                print("[CHECK] RIGHT is blocked - running avoidance logic")
+                # Use full obstacle avoidance based on current scan
+                action = obstacle_avoidance_logic(scan_results['left'], scan_results['center'], scan_results['right'])
+                if action == 'forward':
+                    #when obstacle detected ,obstacle_led will blink at 1s interval
+                    obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
+                    forward(); sleep(2); stop(); movement_counter += 1
+                elif action == 'left':
+                    #when obstacle detected ,obstacle_led will blink at 1s interval
+                    obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
+                    left_turn()
+                elif action == 'right':
+                    #when obstacle detected ,obstacle_led will blink at 1s interval
+                    obstacle_alert_led.blink(on_time=1, off_time=1, n=5)
+                    right_turn()
+                elif action == 'backward_left':
+                    backward(); left_turn(); movement_counter = 0
+            else:
+                print("[TURN] RIGHT is clear - perform corner turn (right)")
+                right_turn()
+                movement_counter = 0
+
         sleep(0.5)
 
-
-
-#    print("Obstacle detected! Initiating avoidance maneuvers.")
-#    # Stop movement
-#    LEDLeft.off()
-#    LEDRight.off()
-#    sleep(1)
-
-    # Scan surroundings
-#    for angle in range(0, 181, 30):
-#        set_angle(angle)
-#        sleep(0.5)
-#        distance = sensor.distance * 100  # convert to cm
-#        print(f"Angle: {angle}, Distance: {distance:.2f} cm")
-#        if distance > 20:
-#            print("Clear path found!")
-#            break
-
-    # Reverse and turn slightly
-#    for _ in range(5):
-#        LEDLeft.toggle()
-#        LEDRight.toggle()
-#        sleep(0.1)
-#    LEDLeft.on()
-#    sleep(1)
-
-#def intruder_alert():
-#    print("Intruder detected! Activating alarm.")
-#    for _ in range(5):
-#        buzzer.value = 0.5
-#        LEDLeft.toggle()
-#        LEDRight.toggle()
-#        sleep(0.5)
-#        buzzer.value = 0
-#        sleep(0.5)
-
-#def low_battery_alert():
-#    print("Low battery level! Activating alert.")
-#    for _ in range(5):
-#        buzzer.value = 0.5
-#        LEDLeft.toggle()
-#        LEDRight.toggle()
-#        sleep(0.5)
-#        buzzer.value = 0
-#        sleep(0.5)
 
 def main():
     """Main program loop for surveillance robot patrol."""
@@ -515,5 +524,4 @@ def main():
         print("Cleanup completed")
 
 if __name__ == '__main__':
-
     main()
